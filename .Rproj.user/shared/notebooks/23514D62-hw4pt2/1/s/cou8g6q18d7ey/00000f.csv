@@ -1,0 +1,8 @@
+"0","library(tidyverse)"
+"0","library(lubridate)"
+"0","library(yardstick)"
+"0","library(pROC)"
+"0","set.seed(67)"
+"0","setwd(""/Users/madisonrudkin/Desktop/showwise app"")"
+"0","train <- read_csv(""train_dataset.csv.gz"")"
+"0","test <- read_csv(""test_dataset.csv.gz"")"

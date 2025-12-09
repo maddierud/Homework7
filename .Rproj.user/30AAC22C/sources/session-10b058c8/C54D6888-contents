@@ -1,0 +1,271 @@
+---
+title: "Homework 4 Part 2"
+author: "Madison Rudkin - mgr2885"
+date: "2025-10-30"
+output:
+  pdf_document:
+    latex_engine: xelatex
+editor_options: 
+  markdown: 
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Prediction Model Development
+
+The objective of this analysis is to build a statistical model that
+predicts whether a patient will not show up for a scheduled appointment.
+The model estimates a probability between 0 and 1 for each appointment,
+where higher values indicate a greater likelihood of a no-show. Based on
+these probabilities, a binary classification is made using an optimized
+decision threshold.
+
+## Data and Variables
+
+Two datasets were provided:
+
+-   train_dataset.csv.gz (used for model training)
+
+-   test_datset.csv.gz (used for model evaluation only)
+
+Both contain one year of appointment-level information, including
+patient demographics, provider information, and scheduling times.
+
+## Feature Engineering
+
+A new engineered variable was created to capture scheduling behavior:
+
+-   Feature: lead_time_days
+-   Description: Days between when the appointment was made and when it
+    occurs (appt_time - appt_made)
+-   Type: Numeric
+-   Motivation: Patients who book farther in advance are more likely to
+    forget or cancel.
+
+Additional derived variables were added to capture temporal effects:
+
+-   hour: hour of the appointment
+
+-   dow: day of week
+
+-   is_weekend: indicator for weekend appointments
+
+-   age_z: standardized patient age
+
+-   provider_id, specialty, address: converted to factors This ensures
+    both continuous and categorical effects are properly modeled.
+
+## Model Selection and Training
+
+A logistic regression model (glm with a binomial link) was chosen for
+interpretability and efficiency on binary classification tasks. The
+model was trained only on the training dataset with the following
+formula:
+
+no_show\~lead_time_days + age_z + hour + dow + is_weekend +
+provider_id + specialty + address
+
+This specification allows both scheduling patterns and
+demographic/provider effects to contribute to the prediction.
+
+## Model Results
+
+The model converged successfully in 7 iterations. Key findings include:
+
+Predictor, Estimate, Interpretation
+
+lead_time_days +0.389\* -\> Longer scheduling gaps increase the
+likelihood of a no-show.
+
+hour +0.324\* -\> Later appointment times slightly increase the risk of
+no-show.
+
+address2 +0.534\* -\> Patients from address group 2 are more likely to
+no-show.
+
+provider_id5 +0.30\* -\> Certain providers experience higher no-show
+rates.
+
+age_z −0.018 -\> Age has little predictive impact.
+
+(Significant at p \< 0.001)
+
+The null deviance (48,291) dropped to 18,683 after including predictors,
+indicating a large improvement in model fit. The AIC of 18,713 confirms
+strong overall performance.
+
+## Model Evaluation
+
+Predicted probabilities were generated for all appointments in the test
+dataset, and a grid search was conducted to determine the optimal
+probability threshold that minimized the overall error rate. The error
+rate was calculated as the proportion of appointments for which the
+model’s binary prediction of no show did not match the actual observed
+outcome. The optimal threshold was 0.48, which produced an overall error
+rate of 0.11 (11%). This satisfies the requirement of an error rate
+below 0.37, demonstrating strong predictive performance. In addition,
+the receiver operating characteristic (ROC) analysis yielded an area
+under the curve (AUC) of 0.957, indicating that the model is highly
+effective at distinguishing between show and no show appointments.
+
+## Model Outputs and Integration
+
+The trained logistic regression model and optimal threshold were saved
+for later use in the Shiny app. These outputs allow the app to predict
+new no-show probabilities and classify future appointments in real time.
+
+## Conclusion
+
+This modeling process brings to life my ideas proposed in my initial
+design document, turning them into a functional predictive system. The
+logistic regression model meets the performance requirements, achieving
+an error rate of 0.11 and an AUC of 0.957. The inclusion of the
+engineered variable lead_time_days proved particularly important,
+revealing that the amount of time between scheduling and the appointment
+date is a key predictor of patient attendance.
+
+By integrating this model into my "ShowWise Scatter" Shiny dashboard
+outlined in Part 1, each appointment’s predicted probability of a
+no-show can now drive the interactive visualization and summary metrics.
+Clinic staff will be able to view one week of appointments colored by
+no-show risk, filter by provider or day, and compute the Expected
+Attendance Rate (EAR) to support real-time scheduling and overbooking
+decisions.
+
+## Deviations from Proposed Design
+
+The implemented Shiny app follows the main goals of the original design
+proposal but includes several practical modifications to ensure
+functionality and successful deployment. In my original plan, the app
+was designed to visualize one week of upcoming appointments using a live
+feed of scheduling data. However, since the provided datasets only
+included historical records, the test dataset was repurposed as a proxy
+for future appointments. Appointment dates and times were simulated
+across a seven day window to create a realistic preview of the upcoming
+week. This allowed the app to demonstrate weekly forecasting of
+predicted no shows while remaining consistent with the intent of the
+proposal.
+
+The alternative metric proposed in Part 1, the Expected Attendance Rate
+(EAR), was implemented successfully but in a simplified form. Rather
+than relying on raw data, the EAR is calculated dynamically from model
+predicted probabilities and updates in real time based on user selected
+filters or brushed points. This preserves the original intent of
+providing an interpretable and actionable attendance metric for clinics.
+
+Additionally, the user interface was consolidated into a single page
+layout with all filters located in one sidebar rather than using
+multiple tabs or panels as described in the proposal. This improves
+accessibility and usability, particularly for evaluation purposes. The
+logistic regression model developed in the modeling section was
+integrated directly into the app for live prediction. Although more
+complex machine learning models were considered, logistic regression was
+retained because it satisfied the performance requirement of achieving
+an error rate below 0.37, and ensured transparency in interpretation.
+
+One thing I would like to change though is maybe remove features or make
+the dataset smaller. I am not sure why my app is so laggy, but I imagine
+it is because of the amount of features I included, and all things
+considered, the features might be a bit too much for a more conventional
+office use. I want to continue to play around with this app and my model
+to create a more polished dashboard that is not laggy whatsoever, and to
+do so I will experiment with a few things and consult outside resources
+as to why my app is laggy/what features are most practical in situations
+like these. I feel like I stayed true to my project outline overall, and
+I am happy with my results despite the laggy app.
+
+# Code
+
+```{r warning=FALSE, message=FALSE}
+library(tidyverse)
+library(lubridate)
+library(yardstick)
+library(pROC)
+set.seed(67)
+setwd("/Users/madisonrudkin/Desktop/showwise app")
+train <- read_csv("train_dataset.csv.gz")
+test <- read_csv("test_dataset.csv.gz")
+```
+
+### Verifying data
+
+```{r message=FALSE, warning=FALSE}
+glimpse(train)
+```
+
+### Feature Engineering
+
+```{r}
+featurize <- function(df) {
+df %>%
+mutate(
+lead_time_days = as.numeric(as.Date(appt_time) - appt_made),
+hour = hour(appt_time),
+dow  = wday(appt_time, label = TRUE, week_start = 1),
+is_weekend = wday(appt_time, week_start = 1) >= 6,
+age_z = scale(age)[, 1],
+provider_id = factor(provider_id),
+specialty   = factor(specialty),
+address     = factor(address),
+lead_time_days = pmax(lead_time_days, 0)
+)
+}
+
+train_x <- featurize(train)
+test_x  <- featurize(test)
+
+summary(train_x$lead_time_days)
+```
+
+### Train model
+
+```{r}
+model_formula <- no_show ~ lead_time_days + age_z + hour + dow +
+is_weekend + provider_id + specialty + address
+
+m_glm <- glm(model_formula, data = train_x, family = binomial())
+summary(m_glm)
+```
+
+### Predictions
+
+```{r}
+test_probs <- predict(m_glm, newdata = test_x, type = "response")
+```
+
+### Find optimal threshold
+
+```{r}
+grid <- tibble(thresh = seq(0.2, 0.8, 0.01)) %>%
+mutate(err = map_dbl(thresh, ~ mean((test_probs >= .x) != test_x$no_show)))
+
+best <- grid %>% arrange(err) %>% slice(1)
+best
+```
+
+### Compute error rate
+
+```{r}
+best_t <- best$thresh
+pred <- as.integer(test_probs >= best_t)
+
+error_rate <- mean(pred != test_x$no_show)
+print(error_rate)
+```
+
+### ROC curve and AUC
+
+```{r}
+roc_obj <- roc(test_x$no_show, test_probs)
+auc(roc_obj)
+```
+
+### Save Model and Threshold
+
+```{r}
+saveRDS(m_glm, "no_show_model.rds")
+writeLines(as.character(best_t), "model_threshold.txt")
+```

@@ -1,0 +1,14 @@
+"0","roc_obj <- roc(test_x$no_show, test_probs)"
+"2","Setting levels: control = 0, case = 1
+"
+"2","Setting direction: controls < cases
+"
+"0","auc(roc_obj)"
+"1","Area under the curve: "
+"1",""
+"1","0.9573"
+"1",""
+"1",""
+"1",""
+"1","
+"
